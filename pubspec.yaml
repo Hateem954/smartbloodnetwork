@@ -36,6 +36,13 @@ dependencies:
   cupertino_icons: ^1.0.8
   cached_network_image: ^3.4.1
   flutter_screenutil: ^5.9.3
+  firebase_auth: ^6.5.4
+  firebase_core: ^4.11.0
+  flutterfire_cli: ^1.4.0
+  image_picker: ^1.2.3
+  permission_handler: ^12.0.3
+  shared_preferences: ^2.5.5
+  cloud_firestore: ^6.6.0
 
 dev_dependencies:
   flutter_test:

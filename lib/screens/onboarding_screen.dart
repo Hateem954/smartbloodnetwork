@@ -76,7 +76,7 @@ class OnboardingScreen extends StatelessWidget {
           // Page indicator
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [_dot(true), _dot(false), _dot(false)],
+            children: [_dot(true), _dot(false)],
           ),
 
           // Button

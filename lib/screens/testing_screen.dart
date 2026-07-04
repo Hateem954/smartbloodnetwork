@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smart_blood_network/screens/give_take_blood_screen.dart';
 import 'package:smart_blood_network/screens/login_screen.dart';
+import 'package:smart_blood_network/utils/colors.dart';
 import 'package:smart_blood_network/utils/customimage.dart';
 import 'package:smart_blood_network/utils/images.dart';
 
@@ -44,7 +45,7 @@ class TestingScreen extends StatelessWidget {
                CustomImageContainer(
                 height: 250,
                 width: 350,
-                imageUrl: AppImages.donation,
+                imageUrl: AppImages.testing,
                 borderRadius: 12,
               ),
               const SizedBox(height: 40),
@@ -76,7 +77,7 @@ class TestingScreen extends StatelessWidget {
               /// Indicator
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [_dot(false), _dot(true), _dot(false)],
+                children: [_dot(false), _dot(true)],
               ),
 
 
@@ -88,10 +89,10 @@ class TestingScreen extends StatelessWidget {
                 height: 55,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=> LoginScreen()));
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=> GiveTakeBloodScreen()));
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: AppColors.red,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),

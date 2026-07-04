@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "48707371161",
+    "project_id": "bloodnetwork-1b96e",
+    "storage_bucket": "bloodnetwork-1b96e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:48707371161:android:c7b07ab0dae16f4385b808",
+        "android_client_info": {
+          "package_name": "com.example.smart_blood_network"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq-WgwsuYISHEIfqW8QJs-jybLB8oRmeE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
