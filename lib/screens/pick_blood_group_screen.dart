@@ -33,6 +33,8 @@ class _PickBloodGroupScreenState extends State<PickBloodGroupScreen> {
 
 
 
+
+
 Future<void> _saveUserData() async {
 
   final prefs = await SharedPreferences.getInstance();
@@ -53,6 +55,8 @@ await FirebaseFirestore.instance.collection("users").doc(uid).set({
         "dob": widget.dob,
         "gender": widget.gender,
         "phone": widget.phone,
+        "availability":"false",
+        "status": "pending",
         "location": widget.location,
         "bloodGroup": "$_selectedType$_selectedRh",
         "role": "user",

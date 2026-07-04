@@ -202,6 +202,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_blood_network/screens/donar_screen.dart';
 import 'package:smart_blood_network/screens/login_screen.dart';
 import 'package:smart_blood_network/screens/profile_screen.dart';
+import 'package:smart_blood_network/screens/user_profile.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -218,12 +219,19 @@ class _HomeScreenState extends State<HomeScreen> {
   String role = "user";
   bool isLoadingRole = true;
   bool isAvailable = false;
+  bool hasProfile = false;
+  String userName = "User";
+  String uid = "";
 
   @override
   void initState() {
     super.initState();
     fetchUserRole();
+    loadAvailability();
+    checkUserProfile();
   }
+
+
 
 
 Future<void> signOutUser(BuildContext context) async {
@@ -262,14 +270,68 @@ Future<void> signOutUser(BuildContext context) async {
       );
     }
   }
+
+ 
   /// ================= FETCH ROLE FROM FIRESTORE (FIXED) =================
-  Future<void> fetchUserRole() async {
+  // Future<void> fetchUserRole() async {
+  //   try {
+  //     final user = FirebaseAuth.instance.currentUser;
+
+  //     if (user == null) {
+  //       setState(() {
+  //         role = "user";
+  //         isLoadingRole = false;
+  //       });
+  //       return;
+  //     }
+
+  //     print("🔥 CURRENT UID: ${user.uid}");
+
+  //     final doc = await FirebaseFirestore.instance
+  //         .collection("users")
+  //         .doc(user.uid)
+  //         .get();
+
+  //     print("🔥 DOC EXISTS: ${doc.exists}");
+  //     print("🔥 DATA: ${doc.data()}");
+
+  //     if (doc.exists && doc.data() != null) {
+  //       final fetchedRole = (doc.data()!["role"] ?? "user")
+  //           .toString()
+  //           .trim()
+  //           .toLowerCase();
+
+  //       print("🔥 ROLE FROM FIRESTORE: $fetchedRole");
+
+  //       setState(() {
+  //         role = fetchedRole;
+  //         isLoadingRole = false;
+  //       });
+  //     } else {
+  //       setState(() {
+  //         role = "user";
+  //         isLoadingRole = false;
+  //       });
+  //     }
+  //   } catch (e) {
+  //     print("❌ ERROR: $e");
+
+  //     setState(() {
+  //       role = "user";
+  //       isLoadingRole = false;
+  //     });
+  //   }
+  // }
+
+
+Future<void> fetchUserRole() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user == null) {
         setState(() {
           role = "user";
+          userName = "User";
           isLoadingRole = false;
         });
         return;
@@ -286,20 +348,27 @@ Future<void> signOutUser(BuildContext context) async {
       print("🔥 DATA: ${doc.data()}");
 
       if (doc.exists && doc.data() != null) {
-        final fetchedRole = (doc.data()!["role"] ?? "user")
+        final data = doc.data() as Map<String, dynamic>;
+
+        final fetchedRole = (data["role"] ?? "user")
             .toString()
             .trim()
             .toLowerCase();
 
+        final fetchedName = (data["fullName"] ?? "User").toString();
+
         print("🔥 ROLE FROM FIRESTORE: $fetchedRole");
+        print("🔥 USER NAME: $fetchedName");
 
         setState(() {
           role = fetchedRole;
+          userName = fetchedName;
           isLoadingRole = false;
         });
       } else {
         setState(() {
           role = "user";
+          userName = "User";
           isLoadingRole = false;
         });
       }
@@ -308,8 +377,27 @@ Future<void> signOutUser(BuildContext context) async {
 
       setState(() {
         role = "user";
+        userName = "User";
         isLoadingRole = false;
       });
+    }
+  }
+  Future<void> checkUserProfile() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) return;
+
+      final DocumentSnapshot profileDoc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(user.uid)
+          .get();
+
+      setState(() {
+        hasProfile = profileDoc.exists;
+      });
+    } catch (e) {
+      debugPrint("Profile Check Error: $e");
     }
   }
 
@@ -371,6 +459,22 @@ Future<void> signOutUser(BuildContext context) async {
   };
 
 
+Future<void> loadAvailability() async {
+    final prefs = await SharedPreferences.getInstance();
+    uid = prefs.getString("uid") ?? "";
+
+    if (uid.isEmpty) return;
+
+    DocumentSnapshot doc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(uid)
+        .get();
+
+    setState(() {
+      isAvailable = doc["availability"] ?? false;
+    });
+  }
+
 Future<void> showLogoutDialog(BuildContext context) async {
     showDialog(
       context: context,
@@ -407,7 +511,11 @@ drawer: Drawer(
           children: [
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(color: Colors.red),
-              accountName:  Text("Blood Donor"),
+              // accountName:  Text("Blood Donor"),
+                accountName: Text(
+                userName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               accountEmail: Text(
                 FirebaseAuth.instance.currentUser?.email ?? "",
               ),
@@ -420,7 +528,7 @@ drawer: Drawer(
               leading: const Icon(Icons.person),
               title: const Text("My Profile"),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const UserProfile()));
 
                 // Navigate to Settings Screen
               },
@@ -510,33 +618,82 @@ ListTile(
           : _userDashboard(),
 
       // ================= BOTTOM NAV =================
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        selectedItemColor: Colors.red,
-        unselectedItemColor: Colors.grey,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const DonorRegistrationScreen()),
-            );
-          }
-          if (index == 2) {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(builder: (context) => const ProfileScreen()),
-            // );
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: "Donate"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-        ],
+//       bottomNavigationBar: BottomNavigationBar(
+//         currentIndex: _currentIndex,
+//         selectedItemColor: Colors.red,
+//         unselectedItemColor: Colors.grey,
+//         onTap: (index) {
+//           setState(() {
+//             _currentIndex = index;
+//           });
+// if (index == 1) {
+//             Navigator.push(
+//               context,
+//               MaterialPageRoute(builder: (context) => const DonorRegistrationScreen()),
+//             );
+//           }
+//           if (index == 2) {
+//             Navigator.push(
+//               context,
+//               MaterialPageRoute(builder: (context) => const ProfileScreen()),
+//             );
+//           }
+//         },
+//         items: const [
+//           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+//           BottomNavigationBarItem(icon: Icon(Icons.favorite), label: "Donate"),
+//           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+//         ],
+//       ),
+//     );
+//   }
+
+bottomNavigationBar: BottomNavigationBar(
+  currentIndex: _currentIndex,
+  selectedItemColor: Colors.red,
+  unselectedItemColor: Colors.grey,
+  onTap: (index) {
+    setState(() {
+      _currentIndex = index;
+    });
+
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const DonorRegistrationScreen(),
+        ),
+      );
+    }
+
+    if (!hasProfile && index == 2) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const ProfileScreen(),
+        ),
+      );
+    }
+  },
+  items: [
+    const BottomNavigationBarItem(
+      icon: Icon(Icons.home),
+      label: "Home",
+    ),
+    const BottomNavigationBarItem(
+      icon: Icon(Icons.favorite),
+      label: "Donate",
+    ),
+
+    // Show Profile only if profile doesn't exist
+    if (!hasProfile)
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.person),
+        label: "Profile",
       ),
+  ],
+),
+
     );
   }
 
@@ -549,11 +706,33 @@ if (index == 1) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // SwitchListTile(
+          //   title: Text(isAvailable ? "Available" : "Not Available"),
+          //   value: isAvailable,
+          //   activeColor: Colors.red,
+          //   onChanged: (val) => setState(() => isAvailable = val),
+          // ),
           SwitchListTile(
-            title: Text(isAvailable ? "Available" : "Not Available"),
-            value: isAvailable,
+            title: Text(
+              isAvailable ? "Available" : "Not Available",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            secondary: Icon(
+              Icons.bloodtype,
+              color: isAvailable ? Colors.green : Colors.grey,
+            ),
             activeColor: Colors.red,
-            onChanged: (val) => setState(() => isAvailable = val),
+            value: isAvailable,
+            onChanged: (value) async {
+              setState(() {
+                isAvailable = value;
+              });
+
+              await FirebaseFirestore.instance
+                  .collection("users")
+                  .doc(uid)
+                  .update({"availability": value});
+            },
           ),
           _section("Active Requests", activeRequests),
           _section("Donation History", donationHistory),
