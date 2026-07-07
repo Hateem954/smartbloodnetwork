@@ -482,7 +482,7 @@ class GiveTakeBloodScreen extends StatelessWidget {
 Widget _bloodButton({required String title, required bool selected}) {
     return Container(
       height: 120,
-      width: 150,
+      width: 120,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: selected ? AppColors.red : Colors.white,

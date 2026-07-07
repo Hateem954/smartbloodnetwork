@@ -55,7 +55,7 @@ await FirebaseFirestore.instance.collection("users").doc(uid).set({
         "dob": widget.dob,
         "gender": widget.gender,
         "phone": widget.phone,
-        "availability":"false",
+        "availability":false,
         "status": "pending",
         "location": widget.location,
         "bloodGroup": "$_selectedType$_selectedRh",

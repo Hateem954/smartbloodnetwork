@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.smart_blood_network"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

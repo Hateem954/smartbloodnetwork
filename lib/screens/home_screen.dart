@@ -195,12 +195,19 @@
 //     );
 //   }
 // }
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_blood_network/screens/admin_hospital%20screen.dart';
 import 'package:smart_blood_network/screens/donar_screen.dart';
+import 'package:smart_blood_network/screens/emergency_req_screen.dart';
+import 'package:smart_blood_network/screens/emergency_widget.dart';
+import 'package:smart_blood_network/screens/hospital_detail_screen.dart';
 import 'package:smart_blood_network/screens/login_screen.dart';
+import 'package:smart_blood_network/screens/nearby_search_screen.dart';
 import 'package:smart_blood_network/screens/profile_screen.dart';
 import 'package:smart_blood_network/screens/user_profile.dart';
 
@@ -222,12 +229,17 @@ class _HomeScreenState extends State<HomeScreen> {
   bool hasProfile = false;
   String userName = "User";
   String uid = "";
+  int acceptedUsers = 0;
+  int pendingUsers = 0;
+  int totalHospitals = 0;
+  int totalRequests = 0;
 
   @override
   void initState() {
     super.initState();
     fetchUserRole();
     loadAvailability();
+    loadDashboardStats();
     checkUserProfile();
   }
 
@@ -270,58 +282,6 @@ Future<void> signOutUser(BuildContext context) async {
       );
     }
   }
-
- 
-  /// ================= FETCH ROLE FROM FIRESTORE (FIXED) =================
-  // Future<void> fetchUserRole() async {
-  //   try {
-  //     final user = FirebaseAuth.instance.currentUser;
-
-  //     if (user == null) {
-  //       setState(() {
-  //         role = "user";
-  //         isLoadingRole = false;
-  //       });
-  //       return;
-  //     }
-
-  //     print("🔥 CURRENT UID: ${user.uid}");
-
-  //     final doc = await FirebaseFirestore.instance
-  //         .collection("users")
-  //         .doc(user.uid)
-  //         .get();
-
-  //     print("🔥 DOC EXISTS: ${doc.exists}");
-  //     print("🔥 DATA: ${doc.data()}");
-
-  //     if (doc.exists && doc.data() != null) {
-  //       final fetchedRole = (doc.data()!["role"] ?? "user")
-  //           .toString()
-  //           .trim()
-  //           .toLowerCase();
-
-  //       print("🔥 ROLE FROM FIRESTORE: $fetchedRole");
-
-  //       setState(() {
-  //         role = fetchedRole;
-  //         isLoadingRole = false;
-  //       });
-  //     } else {
-  //       setState(() {
-  //         role = "user";
-  //         isLoadingRole = false;
-  //       });
-  //     }
-  //   } catch (e) {
-  //     print("❌ ERROR: $e");
-
-  //     setState(() {
-  //       role = "user";
-  //       isLoadingRole = false;
-  //     });
-  //   }
-  // }
 
 
 Future<void> fetchUserRole() async {
@@ -401,6 +361,37 @@ Future<void> fetchUserRole() async {
     }
   }
 
+  // ================= DASHBOARD STATS =================
+Future<void> loadDashboardStats() async {
+    // Accepted Users
+    QuerySnapshot accepted = await FirebaseFirestore.instance
+        .collection("users")
+        .where("status", isEqualTo: "accepted")
+        .get();
+
+    // Pending Users
+    QuerySnapshot pending = await FirebaseFirestore.instance
+        .collection("users")
+        .where("status", isEqualTo: "pending")
+        .get();
+
+    // Hospitals
+    QuerySnapshot hospitals = await FirebaseFirestore.instance
+        .collection("hospitals")
+        .get();
+
+    // Blood Requests
+    QuerySnapshot requests = await FirebaseFirestore.instance
+        .collection("requests")
+        .get();
+
+    setState(() {
+      acceptedUsers = accepted.docs.length;
+      pendingUsers = pending.docs.length;
+      totalHospitals = hospitals.docs.length;
+      totalRequests = requests.docs.length;
+    });
+  }
   // ================= USER DATA =================
   final List<String> activeRequests = [
     "Need B+ blood in Lahore",
@@ -417,15 +408,12 @@ Future<void> fetchUserRole() async {
     "Civil Hospital, Karachi",
   ];
 
-  final List<String> notifications = [
-    "New emergency near your location",
-    "Your donation was approved",
-  ];
+  // final List<String> notifications = [
+  //   "New emergency near your location",
+  //   "Your donation was approved",
+  // ];
 
-  final List<String> nearbyEmergencies = [
-    "Accident case - 2km away",
-    "Surgery need A+ blood - 5km away",
-  ];
+ 
 
   // ================= ADMIN DATA =================
   final List<String> users = [
@@ -434,10 +422,6 @@ Future<void> fetchUserRole() async {
     "John Doe (Pending)",
   ];
 
-  final List<String> hospitals = [
-    "Jinnah Hospital (Pending Verification)",
-    "Civil Hospital (Verified)",
-  ];
 
   final List<String> fakeRequests = ["Fake request reported: XYZ blood demand"];
 
@@ -491,7 +475,12 @@ Future<void> showLogoutDialog(BuildContext context) async {
               Navigator.pop(context);
               await signOutUser(context);
             },
-            child: const Text("Logout"),
+            child: const Text("Logout",
+              style: TextStyle(
+                color: Colors.red,
+         
+              ),
+            ),
           ),
         ],
       ),
@@ -604,11 +593,15 @@ ListTile(
             _scaffoldKey.currentState!.openDrawer();
           },
         ),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: Icon(Icons.notifications),
-          ),
+        actions:  [
+          GestureDetector(onTap: (){
+            print("notification pressed");
+          }, child: Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Icon(Icons.notifications),
+            ),
+          )
+          
         ],
       ),
 
@@ -657,7 +650,7 @@ bottomNavigationBar: BottomNavigationBar(
       _currentIndex = index;
     });
 
-    if (index == 1) {
+    if (index == 2) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -665,8 +658,22 @@ bottomNavigationBar: BottomNavigationBar(
         ),
       );
     }
+      if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NearbySearchScreen()),
+            );
+          }
 
-    if (!hasProfile && index == 2) {
+          if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const EmergencyRequestScreen(),
+              ),
+            );
+          }
+    if (!hasProfile && index == 4) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -680,11 +687,18 @@ bottomNavigationBar: BottomNavigationBar(
       icon: Icon(Icons.home),
       label: "Home",
     ),
+      const BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            label: "Search",
+          ),
     const BottomNavigationBarItem(
       icon: Icon(Icons.favorite),
       label: "Donate",
     ),
-
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.emergency),
+            label: "Emergency",
+          ),
     // Show Profile only if profile doesn't exist
     if (!hasProfile)
       const BottomNavigationBarItem(
@@ -712,6 +726,7 @@ bottomNavigationBar: BottomNavigationBar(
           //   activeColor: Colors.red,
           //   onChanged: (val) => setState(() => isAvailable = val),
           // ),
+           
           SwitchListTile(
             title: Text(
               isAvailable ? "Available" : "Not Available",
@@ -736,9 +751,11 @@ bottomNavigationBar: BottomNavigationBar(
           ),
           _section("Active Requests", activeRequests),
           _section("Donation History", donationHistory),
-          _section("Saved Hospitals", savedHospitals),
-          _section("Recent Notifications", notifications),
-          _section("Nearby Emergency Cases", nearbyEmergencies),
+          // _section("Saved Hospitals", savedHospitals),
+          _verifiedHospitals(),
+          // _section("Recent Notifications", notifications),
+          // _section("Nearby Emergency Cases", nearbyEmergencies),
+          EmergencyWidget(),
         ],
       ),
     );
@@ -764,15 +781,33 @@ bottomNavigationBar: BottomNavigationBar(
             crossAxisCount: 2,
             childAspectRatio: 2,
             physics: const NeverScrollableScrollPhysics(),
-            children: stats.entries
-                .map((e) => _statCard(e.key, e.value))
-                .toList(),
+            // children: stats.entries
+            //     .map((e) => _statCard(e.key, e.value))
+            //     .toList(),
+
+            children: [
+              _statCard("Accepted Users", acceptedUsers.toString(), () {
+                print("Accepted Users tapped");
+              }),
+
+              _statCard("Pending Users", pendingUsers.toString(), () {
+                print("Pending Users tapped");
+              }),
+
+              _statCard("Hospitals", totalHospitals.toString(), () {
+                Navigator.push(context, MaterialPageRoute(builder: (context)=> AdminHospitalScreen()));
+              }),
+
+              _statCard("Blood Requests", totalRequests.toString(), () {
+                print("Blood Requests tapped");
+              }),
+            ],
           ),
 
           const SizedBox(height: 15),
 
           _section("👥 Manage Users", users),
-          _section("🏥 Verify Hospitals", hospitals),
+          // _section("🏥 Verify Hospitals", hospitals),
           _section("🚨 Remove Fake Requests", fakeRequests),
           _section("⚠️ Moderate User Reports", reports),
           _section("📢 Emergency Announcements", announcements),
@@ -823,25 +858,126 @@ bottomNavigationBar: BottomNavigationBar(
     );
   }
 
-  Widget _statCard(String title, String value) {
-    return Container(
-      margin: const EdgeInsets.all(6),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 5),
-          Text(title),
-        ],
+  // Widget _statCard(String title, String value) {
+  //   return Container(
+  //     margin: const EdgeInsets.all(6),
+  //     padding: const EdgeInsets.all(10),
+  //     decoration: BoxDecoration(
+  //       color: Colors.white,
+  //       borderRadius: BorderRadius.circular(12),
+  //     ),
+  //     child: Column(
+  //       mainAxisAlignment: MainAxisAlignment.center,
+  //       children: [
+  //         Text(
+  //           value,
+  //           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+  //         ),
+  //         const SizedBox(height: 5),
+  //         Text(title),
+  //       ],
+  //     ),
+  //   );
+  // }
+
+Widget _verifiedHospitals() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("hospitals")
+          .where("verified", isEqualTo: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Text("No verified hospitals found.");
+        }
+
+        final hospitals = snapshot.data!.docs;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                "🏥 Verified Hospitals",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+            ...hospitals.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.local_hospital, color: Colors.red),
+
+                  // ONLY NAME SHOWN
+                  title: Text(
+                    data["name"] ?? "Unknown Hospital",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+
+                  // CLICK TO OPEN DETAILS
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HospitalDetailScreen(
+                          name: data["name"] ?? "",
+                          address: data["address"] ?? "",
+                          phone: data["phone"] ?? "",
+                          latitude: data["latitude"],
+                          longitude: data["longitude"],
+                          verified: data["verified"] ?? false,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }).toList(),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _statCard(String title, String value, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.all(6),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 5),
+
+            Text(title),
+          ],
+        ),
       ),
     );
   }
 }
+
+

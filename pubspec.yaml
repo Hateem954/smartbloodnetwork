@@ -43,6 +43,10 @@ dependencies:
   permission_handler: ^12.0.3
   shared_preferences: ^2.5.5
   cloud_firestore: ^6.6.0
+  geolocator: ^14.0.2
+  fluttertoast: ^9.1.0
+  google_maps_flutter: ^2.17.1
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
