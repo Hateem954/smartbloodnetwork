@@ -202,14 +202,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_blood_network/screens/admin_hospital%20screen.dart';
+import 'package:smart_blood_network/screens/all_hospital_screen.dart';
+import 'package:smart_blood_network/screens/donar_detail_screen.dart';
 import 'package:smart_blood_network/screens/donar_screen.dart';
 import 'package:smart_blood_network/screens/emergency_req_screen.dart';
 import 'package:smart_blood_network/screens/emergency_widget.dart';
 import 'package:smart_blood_network/screens/hospital_detail_screen.dart';
 import 'package:smart_blood_network/screens/login_screen.dart';
 import 'package:smart_blood_network/screens/nearby_search_screen.dart';
+import 'package:smart_blood_network/screens/pending_user_screen.dart';
 import 'package:smart_blood_network/screens/profile_screen.dart';
 import 'package:smart_blood_network/screens/user_profile.dart';
+import 'package:smart_blood_network/screens/users_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -221,7 +225,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
-
+int totalDonors = 0;
   /// 🔥 ROLE FROM FIRESTORE
   String role = "user";
   bool isLoadingRole = true;
@@ -229,6 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool hasProfile = false;
   String userName = "User";
   String uid = "";
+  String? currentUid;
   int acceptedUsers = 0;
   int pendingUsers = 0;
   int totalHospitals = 0;
@@ -241,9 +246,1262 @@ class _HomeScreenState extends State<HomeScreen> {
     loadAvailability();
     loadDashboardStats();
     checkUserProfile();
+     getTotalDonors();
+     checkUserStatus();
+     checkUserStatusWidget();
+     loadCurrentUid();
   }
 
 
+Future<void> loadCurrentUid() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      currentUid = prefs.getString("uid");
+    });
+  }
+
+Future<void> checkUserStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) return;
+
+      final doc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(user.uid)
+          .get();
+
+      if (!doc.exists) {
+        return;
+      }
+
+      final data = doc.data()!;
+      final String status = (data["status"] ?? "pending")
+          .toString()
+          .toLowerCase();
+
+      if (status == "accepted") {
+      
+        // User is approved
+        return;
+      }
+
+      if (status == "pending") {
+        if (!mounted) return;
+
+        Icon(Icons.hourglass_top, color: Colors.orange, size: 70);
+        SizedBox(height: 20);
+        Text(
+          "Your account is under review.",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        );
+        SizedBox(height: 10);
+        Text("Please wait for admin approval.");
+        return;
+      }
+
+      if (status == "rejected") {
+        if (!mounted) return;
+
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text("Account Rejected"),
+            content: const Text(
+              "Your account has been rejected by the administrator. Please contact support.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+
+                  if (!mounted) return;
+
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
+
+  Widget checkUserStatusWidget() {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection("users")
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Center(child: Text("User not found"));
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final status = (data["status"] ?? "pending").toString().toLowerCase();
+
+        if (status == "accepted") {
+          return _userDashboard();
+        } else if (status == "pending") {
+          return const Center(
+            child: Text(
+              "Your account is pending approval.",
+              style: TextStyle(fontSize: 18),
+            ),
+          );
+        } else {
+          return const Center(
+            child: Text(
+              "Your account has been rejected.",
+              style: TextStyle(color: Colors.red, fontSize: 18),
+            ),
+          );
+        }
+      },
+    );
+  }
+Future<Map<String, dynamic>?> getUserData(String uid) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+
+    if (doc.exists) {
+      return doc.data();
+    }
+    return null;
+  }
+
+// Widget _allDonors() {
+//     return StreamBuilder<QuerySnapshot>(
+//       stream: FirebaseFirestore.instance.collection("donors").snapshots(),
+//       builder: (context, snapshot) {
+//         if (snapshot.connectionState == ConnectionState.waiting) {
+//           return const Center(child: CircularProgressIndicator());
+//         }
+
+//         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+//           return const Text("No donors found.");
+//         }
+
+//         final donors = snapshot.data!.docs;
+
+//         return Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             const Padding(
+//               padding: EdgeInsets.symmetric(vertical: 10),
+//               child: Text(
+//                 "🩸 Available Donors",
+//                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+//               ),
+//             ),
+
+//             // ...donors.map((doc) {
+//             //   final donor = doc.data() as Map<String, dynamic>;
+
+           
+//             // ...donors.map((doc) {
+//             //   final donor = doc.data() as Map<String, dynamic>;
+//             //      return Card(
+//             //       margin: const EdgeInsets.only(bottom: 8),
+//             //       child: ListTile(
+//             //         leading: const CircleAvatar(child: Icon(Icons.person)),
+
+//             //         title: Text(
+//             //           donor["blood_group"] ?? "",
+//             //           style: const TextStyle(fontWeight: FontWeight.bold),
+//             //         ),
+
+//             //         subtitle: Text("${donor["city"]} • ${donor["availability"]}"),
+
+//             //         trailing: const Text(
+//             //           "View Details",
+//             //           style: TextStyle(
+//             //             color: Colors.red,
+//             //             fontWeight: FontWeight.bold,
+//             //           ),
+//             //         ),
+
+//             //         onTap: () {
+//             //           _showDonorDetails(context, donor);
+//             //         },
+//             //       ),
+//             //     );
+//             // }).toList(),
+         
+//          ...donors.map((doc) {
+//               final donor = doc.data() as Map<String, dynamic>;
+
+//               return Card(
+//                 elevation: 2,
+//                 margin: const EdgeInsets.only(bottom: 12),
+//                 shape: RoundedRectangleBorder(
+//                   borderRadius: BorderRadius.circular(12),
+//                 ),
+//                 child: Padding(
+//                   padding: const EdgeInsets.all(12),
+//                   child: Column(
+//                     children: [
+//                       Row(
+//                         crossAxisAlignment: CrossAxisAlignment.start,
+//                         children: [
+//                           CircleAvatar(
+//                             radius: 28,
+//                             backgroundColor: Colors.grey.shade200,
+//                             backgroundImage:
+//                                 donor["image"] != null &&
+//                                     donor["image"].toString().isNotEmpty
+//                                 ? NetworkImage(donor["image"])
+//                                 : null,
+//                             child:
+//                                 donor["image"] == null ||
+//                                     donor["image"].toString().isEmpty
+//                                 ? const Icon(Icons.person, size: 30)
+//                                 : null,
+//                           ),
+
+//                           const SizedBox(width: 12),
+
+//                           Expanded(
+//                             child: Column(
+//                               crossAxisAlignment: CrossAxisAlignment.start,
+//                               children: [
+//                                 // Text(
+//                                 //   donor["name"] ?? "Unknown Donor",
+//                                 //   style: const TextStyle(
+//                                 //     fontSize: 16,
+//                                 //     fontWeight: FontWeight.bold,
+//                                 //   ),
+//                                 // ),
+//                                 FutureBuilder<QuerySnapshot>(
+//                                   future: FirebaseFirestore.instance
+//                                       .collection("users")
+//                                       .where("uid", isEqualTo: donor["uid"])
+                                      
+//                                       .get(),
+//                                   builder: (context, snapshot) {
+//                                     if (snapshot.connectionState ==
+//                                         ConnectionState.waiting) {
+//                                       return const Text(
+//                                         "Loading...",
+//                                         style: TextStyle(
+//                                           fontSize: 16,
+//                                           fontWeight: FontWeight.bold,
+//                                         ),
+//                                       );
+//                                     }
+
+//                                     if (!snapshot.hasData ||
+//                                         snapshot.data!.docs.isEmpty) {
+//                                       return const Text(
+//                                         "Unknown Donor",
+//                                         style: TextStyle(
+//                                           fontSize: 16,
+//                                           fontWeight: FontWeight.bold,
+//                                         ),
+//                                       );
+//                                     }
+
+//                                     final user =
+//                                         snapshot.data!.docs.first.data()
+//                                             as Map<String, dynamic>;
+
+//                                     return Text(
+//                                       user["fullName"] ?? "Unknown Donor",
+//                                       style: const TextStyle(
+//                                         fontSize: 16,
+//                                         fontWeight: FontWeight.bold,
+//                                       ),
+//                                     );
+//                                   },
+//                                 ),
+
+//                                 const SizedBox(height: 4),
+
+//                                 Text(
+//                                   donor["city"] ?? "",
+//                                   style: TextStyle(
+//                                     color: Colors.grey.shade700,
+//                                     fontSize: 13,
+//                                   ),
+//                                 ),
+
+//                                 const SizedBox(height: 2),
+
+//                                 Text(
+//                                   donor["availability"] ?? "",
+//                                   style: TextStyle(
+//                                     color: Colors.grey.shade700,
+//                                     fontSize: 13,
+//                                   ),
+//                                 ),
+//                               ],
+//                             ),
+//                           ),
+
+//                           Column(
+//                             children: [
+//                               Text(
+//                                 donor["blood_group"] ?? "",
+//                                 style: const TextStyle(
+//                                   fontSize: 22,
+//                                   fontWeight: FontWeight.bold,
+//                                 ),
+//                               ),
+
+//                               const SizedBox(height: 12),
+
+//                               Row(
+//                                 children: [
+//                                   CircleAvatar(
+//                                     radius: 16,
+//                                     backgroundColor: Colors.red.shade50,
+//                                     child: IconButton(
+//                                       padding: EdgeInsets.zero,
+//                                       iconSize: 16,
+//                                       icon: const Icon(
+//                                         Icons.message,
+//                                         color: Colors.red,
+//                                       ),
+//                                       onPressed: () {
+//                                         // Chat
+//                                       },
+//                                     ),
+//                                   ),
+
+//                                   const SizedBox(width: 8),
+
+//                                   CircleAvatar(
+//                                     radius: 16,
+//                                     backgroundColor: Colors.red.shade50,
+//                                     child: IconButton(
+//                                       padding: EdgeInsets.zero,
+//                                       iconSize: 16,
+//                                       icon: const Icon(
+//                                         Icons.call,
+//                                         color: Colors.red,
+//                                       ),
+//                                       onPressed: () {
+//                                         // Call
+//                                       },
+//                                     ),
+//                                   ),
+//                                 ],
+//                               ),
+//                             ],
+//                           ),
+//                         ],
+//                       ),
+
+//                       const SizedBox(height: 16),
+
+//                       Row(
+//                         children: [
+//                           Expanded(
+//                             child: OutlinedButton(
+//                               style: OutlinedButton.styleFrom(
+//                                 shape: const StadiumBorder(),
+//                               ),
+//                               onPressed: () {
+//                                 _showDonorDetails(context, donor);
+//                               },
+//                               child: const Text("View Details"),
+//                             ),
+//                           ),
+
+//                           const SizedBox(width: 10),
+
+//                           Expanded(
+//                             child: ElevatedButton(
+//                               style: ElevatedButton.styleFrom(
+//                                 backgroundColor: Colors.red,
+//                                 foregroundColor: Colors.white,
+//                                 shape: const StadiumBorder(),
+//                               ),
+//                               onPressed: () {
+//                                 // Request donor
+//                               },
+//                               child: const Text("Request for Donor"),
+//                             ),
+//                           ),
+//                         ],
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//               );
+//             }).toList(),
+//           ],
+//         );
+//       },
+//     );
+//   }
+
+
+//   Widget donorCard(BuildContext context, Map<String, dynamic> donor) {
+//     return Container(
+//       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+//       padding: const EdgeInsets.all(10),
+//       decoration: BoxDecoration(
+//         color: Colors.white,
+//         borderRadius: BorderRadius.circular(12),
+//         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+//       ),
+//       child: Column(
+//         children: [
+//           /// Top Row
+//           Row(
+//             children: [
+//               const CircleAvatar(
+//                 radius: 28,
+//                 backgroundColor: Colors.grey,
+//                 child: Icon(Icons.person, color: Colors.white),
+//               ),
+
+//               const SizedBox(width: 10),
+
+//               Expanded(
+//                 child: Column(
+//                   crossAxisAlignment: CrossAxisAlignment.start,
+//                   children: [
+//                     Text(
+//                       donor["fullName"] ?? "Unknown Donor",
+//                       style: const TextStyle(
+//                         fontWeight: FontWeight.bold,
+//                         fontSize: 15,
+//                       ),
+//                     ),
+
+//                     const SizedBox(height: 3),
+
+//                     Text(
+//                       donor["location"] ?? "",
+//                       style: const TextStyle(color: Colors.grey, fontSize: 12),
+//                     ),
+
+//                     // Text(
+//                     //   donor["city"] ?? "",
+//                     //   style: const TextStyle(color: Colors.grey, fontSize: 12),
+//                     // ),
+//                   ],
+//                 ),
+//               ),
+// Column(
+//                 crossAxisAlignment: CrossAxisAlignment.end,
+//                 children: [
+//                   Text(
+//                     donor["blood_group"],
+//                     style: const TextStyle(
+//                       fontWeight: FontWeight.bold,
+//                       fontSize: 18,
+//                     ),
+//                   ),
+
+//                   const SizedBox(height: 8),
+
+//                   Row(
+//                     mainAxisSize: MainAxisSize.min,
+//                     children: [
+//                       CircleAvatar(
+//                         radius: 14,
+//                         backgroundColor: Colors.red.shade50,
+//                         child: const Icon(
+//                           Icons.bloodtype,
+//                           size: 16,
+//                           color: Colors.red,
+//                         ),
+//                       ),
+
+//                       const SizedBox(width: 8),
+
+//                       CircleAvatar(
+//                         radius: 14,
+//                         backgroundColor: Colors.red.shade50,
+//                         child: const Icon(
+//                           Icons.call,
+//                           size: 16,
+//                           color: Colors.red,
+//                         ),
+//                       ),
+//                     ],
+//                   ),
+//                 ],
+//               )
+//             ],
+//           ),
+
+//           const SizedBox(height: 12),
+
+//           /// Buttons
+//           Row(
+//             children: [
+//               Expanded(
+//                 child: OutlinedButton(
+//                   onPressed: () {
+//                     _showDonorDetails(context, donor);
+//                   },
+//                   child: const Text("View Details"),
+//                 ),
+//               ),
+
+//               const SizedBox(width: 10),
+
+//               Expanded(
+//                 child: ElevatedButton(
+//                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+//                   onPressed: () {
+//                     // Request Donation
+//                   },
+//                   child: const Text(
+//                     "Request to Donate",
+//                     style: TextStyle(color: Colors.white),
+//                   ),
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+
+Widget _allDonors() {
+    if (currentUid == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection("donors").snapshots(),
+
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Text("No donors found.");
+        }
+
+        final allDonors = snapshot.data!.docs;
+
+        // Remove logged-in user's donor profile
+        final donors = allDonors.where((doc) {
+          final donor = doc.data() as Map<String, dynamic>;
+
+          return donor["uid"] != currentUid;
+        }).toList();
+
+        if (donors.isEmpty) {
+          return const Text("No other donors available.");
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                "🩸 Available Donors",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+            ...donors.map((doc) {
+              final donor = doc.data() as Map<String, dynamic>;
+
+              return Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+
+                  child: Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+
+                        children: [
+                          // Profile Image
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundColor: Colors.grey.shade200,
+
+                            backgroundImage:
+                                donor["image"] != null &&
+                                    donor["image"].toString().isNotEmpty
+                                ? NetworkImage(donor["image"])
+                                : null,
+
+                            child:
+                                donor["image"] == null ||
+                                    donor["image"].toString().isEmpty
+                                ? const Icon(Icons.person, size: 30)
+                                : null,
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          // Name + City + Availability
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+
+                              children: [
+                                FutureBuilder<QuerySnapshot>(
+                                  future: FirebaseFirestore.instance
+                                      .collection("users")
+                                      .where("uid", isEqualTo: donor["uid"])
+                                      .get(),
+
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return const Text(
+                                        "Loading...",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      );
+                                    }
+
+                                    if (!snapshot.hasData ||
+                                        snapshot.data!.docs.isEmpty) {
+                                      return const Text(
+                                        "Unknown Donor",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      );
+                                    }
+
+                                    final user =
+                                        snapshot.data!.docs.first.data()
+                                            as Map<String, dynamic>;
+
+                                    return Text(
+                                      user["fullName"] ?? "Unknown Donor",
+
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    );
+                                  },
+                                ),
+
+                                const SizedBox(height: 5),
+
+                                Text(
+                                  donor["city"] ?? "",
+
+                                  style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 2),
+
+                                Text(
+                                  donor["availability"] ?? "",
+
+                                  style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Blood Group + Buttons
+                          Column(
+                            children: [
+                              Text(
+                                donor["blood_group"] ?? "",
+
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: Colors.red.shade50,
+
+                                    child: IconButton(
+                                      padding: EdgeInsets.zero,
+
+                                      iconSize: 16,
+
+                                      icon: const Icon(
+                                        Icons.message,
+                                        color: Colors.red,
+                                      ),
+
+                                      onPressed: () {
+                                        // Chat
+                                      },
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 8),
+
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: Colors.red.shade50,
+
+                                    child: IconButton(
+                                      padding: EdgeInsets.zero,
+
+                                      iconSize: 16,
+
+                                      icon: const Icon(
+                                        Icons.call,
+                                        color: Colors.red,
+                                      ),
+
+                                      onPressed: () {
+                                        // Call
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                shape: const StadiumBorder(),
+                              ),
+
+                              onPressed: () {
+                                _showDonorDetails(context, donor);
+                              },
+
+                              child: const Text("View Details"),
+                            ),
+                          ),
+
+                          const SizedBox(width: 10),
+
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+
+                                foregroundColor: Colors.white,
+
+                                shape: const StadiumBorder(),
+                              ),
+
+                              onPressed: () async {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+
+                                // Logged-in user's UID
+                                final requesterId =
+                                    prefs.getString("uid") ?? "";
+
+                                if (requesterId.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("User not logged in."),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                // Fetch logged-in user's details
+                                final userSnapshot = await FirebaseFirestore
+                                    .instance
+                                    .collection("users")
+                                    .where("uid", isEqualTo: requesterId)
+                                    .limit(1)
+                                    .get();
+
+                                if (userSnapshot.docs.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("User details not found."),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                final userData =
+                                    userSnapshot.docs.first.data()
+                                        as Map<String, dynamic>;
+
+                                final requesterName =
+                                    userData["fullName"] ?? "";
+
+                                // Create a request document with its ID
+                                final requestRef = FirebaseFirestore.instance
+                                    .collection("donation_requests")
+                                    .doc();
+
+                                await requestRef.set({
+                                  "requestId": requestRef.id,
+
+                                  // Donor Information
+                                  "donorId": donor["uid"],
+                                  "bloodGroup": donor["blood_group"],
+
+                                  // Requester Information
+                                  "requesterId": requesterId,
+                                  "requesterName": requesterName,
+
+                                  // Request Status
+                                  "status": "pending",
+                                  "createdAt": FieldValue.serverTimestamp(),
+                                });
+
+                                
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "Donation request sent successfully.",
+                                    ),
+                                  ),
+                                );
+                              },
+
+                              child: const Text("Request for Donor"),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ],
+        );
+      },
+    );
+  }
+Widget donorCard(BuildContext context, Map<String, dynamic> donor) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: getUserData(donor["uid"]),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final user = snapshot.data;
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+          ),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.grey,
+                child: Icon(Icons.person, color: Colors.white),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    /// Full Name from Users collection
+                    // Text(
+                    //   user?["fullName"] ?? "Unknown Donor",
+                    //   style: const TextStyle(
+                    //     fontWeight: FontWeight.bold,
+                    //     fontSize: 15,
+                    //   ),
+                    // ),
+                    FutureBuilder<QuerySnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection("users")
+                          .where("uid", isEqualTo: donor["uid"])
+                          .get(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Text(
+                            "Loading...",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Text(
+                            "Unknown Donor",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        }
+
+                        final user =
+                            snapshot.data!.docs.first.data()
+                                as Map<String, dynamic>;
+
+                        return Text(
+                          user["fullName"] ?? "Unknown Donor",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 3),
+
+                    Text(
+                      donor["location"] ?? "",
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    donor["blood_group"] ?? "",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Colors.red.shade50,
+                        child: const Icon(
+                          Icons.bloodtype,
+                          size: 16,
+                          color: Colors.red,
+                        ),
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Colors.red.shade50,
+                        child: const Icon(
+                          Icons.call,
+                          size: 16,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  void _showDonorDetails(BuildContext context, Map<String, dynamic> donor) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                /// Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Details Information",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.pop(context),
+                      child: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                /// Profile Image
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.grey.shade200,
+                  backgroundImage: donor["image"] != null
+                      ? NetworkImage(donor["image"])
+                      : null,
+                  child: donor["image"] == null
+                      ? const Icon(Icons.person, size: 40, color: Colors.grey)
+                      : null,
+                ),
+
+                const SizedBox(height: 12),
+
+                /// Name
+              FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection("users")
+                      .where("uid", isEqualTo: donor["uid"])
+                      .get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Text(
+                        "Loading...",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Text(
+                        "Unknown Donor",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }
+
+                    final user =
+                        snapshot.data!.docs.first.data()
+                            as Map<String, dynamic>;
+
+                    return Text(
+                      user["fullName"] ?? "Unknown Donor",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 20),
+
+                _detailRow("Address", donor["location"] ?? "-"),
+                _detailRow("Mobile Number", donor["contact"] ?? "-"),
+                _detailRow(
+                  "Current Status",
+                  donor["availability"] ?? "Available",
+                ),
+
+                const SizedBox(height: 25),
+
+                /// Request Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+//                   onPressed: () async {
+//   final prefs = await SharedPreferences.getInstance();
+
+
+//                       // final prefs = await SharedPreferences.getInstance();
+//                       // await prefs.setString("uid", user.uid);
+
+//   final requesterId = prefs.getString("uid") ?? "";
+//   final requesterName = prefs.getString("user_name") ?? "";
+
+//   await FirebaseFirestore.instance
+//       .collection("donation_requests")
+//       .add({
+//     "donorId": donor["uid"],
+//     "donorName": donor["name"],
+
+//     "requesterId": requesterId,
+//     "requesterName": requesterName,
+
+//     "bloodGroup": donor["blood_group"],
+
+//     "status": "pending",
+
+//     "createdAt": FieldValue.serverTimestamp(),
+//   });
+
+//   Navigator.pop(context);
+
+//   ScaffoldMessenger.of(context).showSnackBar(
+//     const SnackBar(
+//       content: Text("Donation request sent successfully."),
+//     ),
+//   );
+// },
+onPressed: () async {
+  final prefs = await SharedPreferences.getInstance();
+
+  // Logged-in user's UID
+  final requesterId = prefs.getString("uid") ?? "";
+
+  if (requesterId.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("User not logged in."),
+      ),
+    );
+    return;
+  }
+
+  // Fetch logged-in user's details
+  final userSnapshot = await FirebaseFirestore.instance
+      .collection("users")
+      .where("uid", isEqualTo: requesterId)
+      .limit(1)
+      .get();
+
+  if (userSnapshot.docs.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("User details not found."),
+      ),
+    );
+    return;
+  }
+
+  final userData =
+      userSnapshot.docs.first.data() as Map<String, dynamic>;
+
+  final requesterName = userData["fullName"] ?? "";
+
+  // Create a request document with its ID
+  final requestRef = FirebaseFirestore.instance
+      .collection("donation_requests")
+      .doc();
+
+  await requestRef.set({
+    "requestId": requestRef.id,
+
+    // Donor Information
+    "donorId": donor["uid"],
+    "bloodGroup": donor["blood_group"],
+
+    // Requester Information
+    "requesterId": requesterId,
+    "requesterName": requesterName,
+
+    // Request Status
+    "status": "pending",
+    "createdAt": FieldValue.serverTimestamp(),
+  });
+
+  Navigator.pop(context);
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text("Donation request sent successfully."),
+    ),
+  );
+},
+                    child: const Text(
+                      "Request to Donates",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String title, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              "$title:",
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(color: Colors.black54)),
+          ),
+        ],
+      ),
+    );
+  }
 
 
 Future<void> signOutUser(BuildContext context) async {
@@ -283,7 +1541,15 @@ Future<void> signOutUser(BuildContext context) async {
     }
   }
 
+Future<void> getTotalDonors() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('donors')
+        .get();
 
+    setState(() {
+      totalDonors = snapshot.docs.length;
+    });
+  }
 Future<void> fetchUserRole() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -393,10 +1659,7 @@ Future<void> loadDashboardStats() async {
     });
   }
   // ================= USER DATA =================
-  final List<String> activeRequests = [
-    "Need B+ blood in Lahore",
-    "Urgent O- request in Karachi",
-  ];
+
 
   final List<String> donationHistory = [
     "Donated B+ on 12 June 2026",
@@ -416,11 +1679,12 @@ Future<void> loadDashboardStats() async {
  
 
   // ================= ADMIN DATA =================
-  final List<String> users = [
-    "Imran Hossen (Active)",
-    "Farjana Afrin (Blocked)",
-    "John Doe (Pending)",
-  ];
+  // final List<String> users = [
+  //   "Imran Hossen (Active)",
+  //   "Farjana Afrin (Blocked)",
+  //   "John Doe (Pending)",
+  // ];
+
 
 
   final List<String> fakeRequests = ["Fake request reported: XYZ blood demand"];
@@ -608,7 +1872,7 @@ ListTile(
       // ================= BODY =================
       body: role.trim().toLowerCase() == "admin"
           ? _adminPanel()
-          : _userDashboard(),
+          : checkUserStatusWidget(),
 
       // ================= BOTTOM NAV =================
 //       bottomNavigationBar: BottomNavigationBar(
@@ -643,63 +1907,80 @@ ListTile(
 
 bottomNavigationBar: BottomNavigationBar(
   currentIndex: _currentIndex,
+  type: BottomNavigationBarType.fixed,
+
   selectedItemColor: Colors.red,
   unselectedItemColor: Colors.grey,
+
+  showSelectedLabels: true,
+  showUnselectedLabels: true,
+
+  selectedFontSize: 12,
+  unselectedFontSize: 12,
+
   onTap: (index) {
     setState(() {
       _currentIndex = index;
     });
 
-    if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const DonorRegistrationScreen(),
-        ),
-      );
-    }
-      if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NearbySearchScreen()),
-            );
-          }
+    switch (index) {
+      case 1:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const NearbySearchScreen(),
+          ),
+        );
+        break;
 
-          if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const EmergencyRequestScreen(),
-              ),
-            );
-          }
-    if (!hasProfile && index == 4) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const ProfileScreen(),
-        ),
-      );
+      case 2:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const DonorRegistrationScreen(),
+          ),
+        );
+        break;
+
+      case 3:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const EmergencyRequestScreen(),
+          ),
+        );
+        break;
+
+      case 4:
+        if (!hasProfile) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ProfileScreen(),
+            ),
+          );
+        }
+        break;
     }
   },
+
   items: [
     const BottomNavigationBarItem(
       icon: Icon(Icons.home),
       label: "Home",
     ),
-      const BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: "Search",
-          ),
+    const BottomNavigationBarItem(
+      icon: Icon(Icons.search),
+      label: "Search",
+    ),
     const BottomNavigationBarItem(
       icon: Icon(Icons.favorite),
       label: "Donate",
     ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.emergency),
-            label: "Emergency",
-          ),
-    // Show Profile only if profile doesn't exist
+    const BottomNavigationBarItem(
+      icon: Icon(Icons.emergency),
+      label: "Emergency",
+    ),
     if (!hasProfile)
       const BottomNavigationBarItem(
         icon: Icon(Icons.person),
@@ -707,10 +1988,8 @@ bottomNavigationBar: BottomNavigationBar(
       ),
   ],
 ),
-
-    );
+   );
   }
-
   // =====================================================
   // 🧑 USER DASHBOARD
   // =====================================================
@@ -749,13 +2028,15 @@ bottomNavigationBar: BottomNavigationBar(
                   .update({"availability": value});
             },
           ),
-          _section("Active Requests", activeRequests),
-          _section("Donation History", donationHistory),
+         
           // _section("Saved Hospitals", savedHospitals),
           _verifiedHospitals(),
+      EmergencyWidget(),
+          // _section("Donation History", _allDonors()),
+          _allDonors(),
           // _section("Recent Notifications", notifications),
           // _section("Nearby Emergency Cases", nearbyEmergencies),
-          EmergencyWidget(),
+          
         ],
       ),
     );
@@ -788,38 +2069,53 @@ bottomNavigationBar: BottomNavigationBar(
             children: [
               _statCard("Accepted Users", acceptedUsers.toString(), () {
                 print("Accepted Users tapped");
+                     Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => UsersScreen()),
+                );
               }),
 
               _statCard("Pending Users", pendingUsers.toString(), () {
                 print("Pending Users tapped");
+                Navigator.push(context, MaterialPageRoute(builder: (context)=> PendingUsersScreen()));
               }),
 
               _statCard("Hospitals", totalHospitals.toString(), () {
                 Navigator.push(context, MaterialPageRoute(builder: (context)=> AdminHospitalScreen()));
               }),
 
-              _statCard("Blood Requests", totalRequests.toString(), () {
-                print("Blood Requests tapped");
+              _statCard("Donors", totalRequests.toString(), () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "Donors can be display below",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               }),
             ],
           ),
 
           const SizedBox(height: 15),
 
-          _section("👥 Manage Users", users),
-          // _section("🏥 Verify Hospitals", hospitals),
-          _section("🚨 Remove Fake Requests", fakeRequests),
-          _section("⚠️ Moderate User Reports", reports),
-          _section("📢 Emergency Announcements", announcements),
+          _allDonors(),
+          // // _section("🏥 Verify Hospitals", hospitals),
+          // _section("🚨 Remove Fake Requests", fakeRequests),
+          // _section("⚠️ Moderate User Reports", reports),
+          // _section("📢 Emergency Announcements", announcements),
 
           const SizedBox(height: 10),
 
-          ElevatedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.add_alert),
-            label: const Text("Create Announcement"),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          ),
+          // ElevatedButton.icon(
+          //   onPressed: () {},
+          //   icon: const Icon(Icons.add_alert),
+          //   label: const Text("Create Announcement"),
+          //   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          // ),
         ],
       ),
     );
@@ -858,34 +2154,15 @@ bottomNavigationBar: BottomNavigationBar(
     );
   }
 
-  // Widget _statCard(String title, String value) {
-  //   return Container(
-  //     margin: const EdgeInsets.all(6),
-  //     padding: const EdgeInsets.all(10),
-  //     decoration: BoxDecoration(
-  //       color: Colors.white,
-  //       borderRadius: BorderRadius.circular(12),
-  //     ),
-  //     child: Column(
-  //       mainAxisAlignment: MainAxisAlignment.center,
-  //       children: [
-  //         Text(
-  //           value,
-  //           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-  //         ),
-  //         const SizedBox(height: 5),
-  //         Text(title),
-  //       ],
-  //     ),
-  //   );
-  // }
 
 Widget _verifiedHospitals() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection("hospitals")
           .where("verified", isEqualTo: true)
+          .limit(3) // Only fetch 3 hospitals
           .snapshots(),
+
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -900,12 +2177,35 @@ Widget _verifiedHospitals() {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Text(
-                "🏥 Verified Hospitals",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    "🏥 Verified Hospitals",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AllHospitalsScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    "View All",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             ...hospitals.map((doc) {
@@ -916,10 +2216,10 @@ Widget _verifiedHospitals() {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+
                 child: ListTile(
                   leading: const Icon(Icons.local_hospital, color: Colors.red),
 
-                  // ONLY NAME SHOWN
                   title: Text(
                     data["name"] ?? "Unknown Hospital",
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -927,7 +2227,6 @@ Widget _verifiedHospitals() {
 
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
 
-                  // CLICK TO OPEN DETAILS
                   onTap: () {
                     Navigator.push(
                       context,
@@ -951,7 +2250,6 @@ Widget _verifiedHospitals() {
       },
     );
   }
-
   Widget _statCard(String title, String value, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
